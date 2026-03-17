@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Chess AI Opponent</title>
+  <link rel="stylesheet"
+        href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+        rel="stylesheet">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="app">
+  <header>
+    <h1>&#9822; Chess AI Opponent</h1>
+    <p class="subtitle">Upload a Duolingo screenshot, choose your side, and play against Stockfish</p>
+  </header>
+
+  <main>
+    <div class="board-column">
+      <div class="player-bar opponent-bar">
+        <span class="player-dot"></span>
+        <span class="player-name" id="opponentLabel">Stockfish AI</span>
+        <span class="thinking-indicator" id="thinkingIndicator">thinking&hellip;</span>
+      </div>
+      <div class="board-wrapper">
+        <div id="chessboard"></div>
+        <div class="board-overlay" id="boardOverlay"></div>
+      </div>
+      <div class="player-bar player-bar-bottom">
+        <span class="player-dot you"></span>
+        <span class="player-name" id="playerLabel">You</span>
+      </div>
+    </div>
+
+    <div class="controls-column">
+
+      <!-- Screenshot Upload (primary) -->
+      <section class="control-section">
+        <h2>Import Screenshot</h2>
+        <div class="upload-area" id="uploadArea">
+          <input type="file" id="fileInput" accept="image/*" hidden>
+          <div class="upload-content" id="uploadContent">
+            <div class="upload-icon">&#128247;</div>
+            <p>Drop a screenshot here or <button class="link-btn" id="browseBtn">browse</button></p>
+            <p class="upload-hint">Works with Duolingo, Chess.com, Lichess, etc.</p>
+          </div>
+          <div class="upload-preview" id="uploadPreview" style="display:none">
+            <img id="previewImg" alt="Uploaded screenshot">
+            <button class="remove-preview" id="removePreview">&times;</button>
+          </div>
+        </div>
+        <button id="analyseBtn" class="btn btn-primary btn-full" disabled>
+          Analyse Screenshot
+        </button>
+        <p class="status-msg" id="visionStatus"></p>
+      </section>
+
+      <!-- Confirmation bar (hidden until analysis completes) -->
+      <section class="control-section confirm-section" id="confirmSection" style="display:none">
+        <h2>Detected Position</h2>
+        <p class="confirm-fen" id="confirmFen"></p>
+        <p class="confirm-hint">Check the board — does it match your screenshot?</p>
+        <div class="confirm-actions">
+          <button id="confirmBtn" class="btn btn-primary">Start Playing</button>
+          <button id="rejectBtn" class="btn">Try Again</button>
+        </div>
+      </section>
+
+      <!-- Play As -->
+      <section class="control-section">
+        <h2>You are playing as</h2>
+        <div class="toggle-group" id="sideToggle">
+          <button class="toggle-btn active" data-side="w">&#9812; White</button>
+          <button class="toggle-btn" data-side="b">&#9818; Black</button>
+        </div>
+      </section>
+
+      <!-- Next to Move -->
+      <section class="control-section">
+        <h2>Next to move</h2>
+        <div class="toggle-group" id="turnToggle">
+          <button class="toggle-btn" data-turn="w">&#9812; White</button>
+          <button class="toggle-btn active" data-turn="b">&#9818; Black</button>
+        </div>
+      </section>
+
+      <!-- Difficulty -->
+      <section class="control-section">
+        <h2>Difficulty</h2>
+        <div class="difficulty-group" id="difficultyGroup">
+          <button class="diff-btn" data-level="0">Beginner</button>
+          <button class="diff-btn" data-level="1">Casual</button>
+          <button class="diff-btn active" data-level="2">Intermediate</button>
+          <button class="diff-btn" data-level="3">Advanced</button>
+          <button class="diff-btn" data-level="4">Expert</button>
+          <button class="diff-btn" data-level="5">Master</button>
+        </div>
+      </section>
+
+      <!-- Game Controls -->
+      <section class="control-section">
+        <h2>Game</h2>
+        <div class="game-controls">
+          <button id="newGameBtn" class="btn btn-primary">New Game</button>
+          <button id="undoBtn" class="btn">Go Back</button>
+          <button id="flipBtn" class="btn">Flip Board</button>
+        </div>
+      </section>
+
+      <!-- Status -->
+      <section class="control-section">
+        <div class="game-status" id="gameStatus">Your turn — drag a piece to move</div>
+      </section>
+
+      <!-- Move History -->
+      <section class="control-section history-section">
+        <h2>Moves</h2>
+        <div class="move-history" id="moveHistory">
+          <p class="empty-history">No moves yet</p>
+        </div>
+      </section>
+
+      <!-- FEN (advanced, collapsed) -->
+      <details class="control-section details-section">
+        <summary class="details-toggle">FEN / Advanced</summary>
+        <div class="details-body">
+          <div class="fen-input-group">
+            <input type="text" id="fenInput"
+                   placeholder="Paste FEN string…"
+                   spellcheck="false">
+            <button id="loadFenBtn" class="btn btn-primary">Load</button>
+          </div>
+          <div class="fen-helpers">
+            <button id="startPosBtn" class="btn btn-small">Starting Position</button>
+            <button id="copyFenBtn" class="btn btn-small">Copy Current FEN</button>
+          </div>
+          <p class="error-msg" id="fenError"></p>
+        </div>
+      </details>
+
+      <!-- API Key Settings -->
+      <details class="control-section details-section" id="settingsDetails">
+        <summary class="details-toggle">&#9881; Settings</summary>
+        <div class="details-body">
+          <label class="setting-label" for="apiKeyInput">Gemini API Key</label>
+          <div class="fen-input-group">
+            <input type="password" id="apiKeyInput"
+                   placeholder="AIzaSy…"
+                   spellcheck="false">
+            <button id="saveKeyBtn" class="btn btn-primary">Save</button>
+          </div>
+          <p class="setting-hint">
+            Free key from <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a>
+            — stored in your browser only.
+          </p>
+          <p class="status-msg" id="keyStatus"></p>
+        </div>
+      </details>
+
+    </div>
+  </main>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script src="js/engine.js"></script>
+<script src="js/vision.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,629 @@
+/* ─── Reset & Base ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #1a1b1e;
+  --surface:     #25262b;
+  --surface-alt: #2c2e33;
+  --border:      #373a40;
+  --text:        #c1c2c5;
+  --text-bright: #e9ecef;
+  --accent:      #58cc02;
+  --accent-dim:  #4baf02;
+  --accent-glow: rgba(88, 204, 2, 0.15);
+  --success:     #58cc02;
+  --warning:     #fcc419;
+  --danger:      #ff6b6b;
+  --radius:      10px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ─── Header ──────────────────────────────────────────────── */
+header {
+  text-align: center;
+  padding: 28px 16px 12px;
+}
+
+header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: var(--text-bright);
+  letter-spacing: -0.02em;
+}
+
+.subtitle {
+  color: var(--text);
+  font-size: 0.9rem;
+  margin-top: 4px;
+  opacity: 0.7;
+}
+
+/* ─── Layout ──────────────────────────────────────────────── */
+main {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  padding: 20px 24px 48px;
+  max-width: 1100px;
+  margin: 0 auto;
+  flex-wrap: wrap;
+}
+
+.board-column {
+  flex-shrink: 0;
+}
+
+.controls-column {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ─── Player Bars ─────────────────────────────────────────── */
+.player-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.player-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.player-dot.you {
+  background: var(--success);
+}
+
+.player-name {
+  color: var(--text-bright);
+}
+
+.thinking-indicator {
+  font-size: 0.75rem;
+  color: var(--warning);
+  opacity: 0;
+  transition: opacity 0.2s;
+  margin-left: auto;
+}
+
+.thinking-indicator.visible {
+  opacity: 1;
+}
+
+/* ─── Chessboard ──────────────────────────────────────────── */
+.board-wrapper {
+  position: relative;
+}
+
+#chessboard {
+  width: 480px;
+  height: 480px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+/* ─── Board Overlay (Check / Checkmate / Stalemate) ───────── */
+.board-overlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.8);
+  padding: 14px 40px;
+  border-radius: 12px;
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  z-index: 100;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+.board-overlay.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+.overlay-check {
+  background: rgba(252, 196, 25, 0.9);
+  color: #1a1b1e;
+}
+
+.overlay-win {
+  background: rgba(88, 204, 2, 0.92);
+  color: #fff;
+}
+
+.overlay-loss {
+  background: rgba(255, 107, 107, 0.92);
+  color: #fff;
+}
+
+.overlay-draw {
+  background: rgba(193, 194, 197, 0.9);
+  color: #1a1b1e;
+}
+
+.board-b72b1 {
+  border: none !important;
+  border-radius: var(--radius) !important;
+}
+
+/* Duolingo-inspired square colours */
+.square-55d63 {
+  background-color: #f0f0f0 !important;
+}
+
+.black-3c85d {
+  background-color: #b8bcc4 !important;
+}
+
+.highlight-white {
+  background-color: rgba(88, 204, 2, 0.30) !important;
+}
+
+.highlight-black {
+  background-color: rgba(88, 204, 2, 0.40) !important;
+}
+
+/* Pieces are locally-hosted staunty SVGs — no filters needed */
+
+/* ─── Sections ────────────────────────────────────────────── */
+.control-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.control-section h2 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text);
+  opacity: 0.6;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+/* ─── Upload Area ─────────────────────────────────────────── */
+.upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  transition: border-color 0.2s, background 0.2s;
+  cursor: pointer;
+  margin-bottom: 10px;
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upload-area.drag-over {
+  border-color: var(--accent);
+  background: var(--accent-glow);
+}
+
+.upload-icon {
+  font-size: 2rem;
+  margin-bottom: 6px;
+}
+
+.upload-content p {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.upload-hint {
+  font-size: 0.75rem !important;
+  opacity: 0.5;
+  margin-top: 4px;
+}
+
+.link-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.upload-preview {
+  position: relative;
+  width: 100%;
+}
+
+.upload-preview img {
+  max-width: 100%;
+  max-height: 200px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.remove-preview {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: none;
+  background: var(--danger);
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-full {
+  width: 100%;
+  padding: 10px;
+}
+
+.status-msg {
+  font-size: 0.8rem;
+  margin-top: 8px;
+  min-height: 1.2em;
+  text-align: center;
+}
+
+.status-msg.error { color: var(--danger); }
+.status-msg.ok    { color: var(--success); }
+.status-msg.busy  { color: var(--warning); }
+
+/* ─── Confirmation ────────────────────────────────────────── */
+.confirm-section {
+  border-color: var(--accent);
+  background: linear-gradient(135deg, var(--surface), rgba(88, 204, 2, 0.05));
+}
+
+.confirm-fen {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.78rem;
+  color: var(--text-bright);
+  background: var(--surface-alt);
+  padding: 6px 10px;
+  border-radius: 6px;
+  word-break: break-all;
+  margin-bottom: 8px;
+}
+
+.confirm-hint {
+  font-size: 0.8rem;
+  color: var(--text);
+  opacity: 0.7;
+  margin-bottom: 10px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.confirm-actions .btn {
+  flex: 1;
+  text-align: center;
+}
+
+/* ─── FEN Input ───────────────────────────────────────────── */
+.fen-input-group {
+  display: flex;
+  gap: 8px;
+}
+
+.fen-input-group input {
+  flex: 1;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 12px;
+  color: var(--text-bright);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.8rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.fen-input-group input:focus {
+  border-color: var(--accent);
+}
+
+.fen-helpers {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.error-msg {
+  color: var(--danger);
+  font-size: 0.8rem;
+  margin-top: 6px;
+  min-height: 1.2em;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────── */
+.btn {
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  color: var(--text-bright);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.btn:hover {
+  background: var(--border);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-dim);
+  border-color: var(--accent-dim);
+}
+
+.btn-small {
+  padding: 5px 10px;
+  font-size: 0.75rem;
+}
+
+/* ─── Toggle Groups ───────────────────────────────────────── */
+.toggle-group {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  background: var(--surface-alt);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.toggle-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.toggle-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.toggle-btn:hover:not(.active) {
+  background: var(--border);
+}
+
+/* ─── Difficulty ──────────────────────────────────────────── */
+.difficulty-group {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+
+.diff-btn {
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-alt);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.diff-btn.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.diff-btn:hover:not(.active) {
+  border-color: var(--accent);
+  color: var(--text-bright);
+}
+
+/* ─── Game Controls ───────────────────────────────────────── */
+.game-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.game-controls .btn {
+  flex: 1;
+  min-width: 80px;
+  text-align: center;
+}
+
+/* ─── Game Status ─────────────────────────────────────────── */
+.game-status {
+  text-align: center;
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-bright);
+  padding: 4px 0;
+}
+
+.game-status.check  { color: var(--warning); }
+.game-status.over   { color: var(--danger);  font-weight: 600; }
+.game-status.win    { color: var(--success); font-weight: 600; }
+
+/* ─── Move History ────────────────────────────────────────── */
+.history-section {
+  flex: 1;
+  min-height: 120px;
+}
+
+.move-history {
+  max-height: 240px;
+  overflow-y: auto;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.82rem;
+  line-height: 1.7;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+.move-history::-webkit-scrollbar       { width: 5px; }
+.move-history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.move-row {
+  display: flex;
+  gap: 6px;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+
+.move-row:hover { background: var(--surface-alt); }
+
+.move-num {
+  color: var(--text);
+  opacity: 0.4;
+  min-width: 28px;
+  text-align: right;
+}
+
+.move-white, .move-black {
+  min-width: 60px;
+  color: var(--text-bright);
+}
+
+.move-white.last, .move-black.last {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.empty-history {
+  color: var(--text);
+  opacity: 0.4;
+  font-family: inherit;
+  font-style: italic;
+  text-align: center;
+  padding: 16px 0;
+}
+
+/* ─── Details / Collapsed Sections ────────────────────────── */
+.details-section {
+  cursor: default;
+}
+
+.details-toggle {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text);
+  opacity: 0.6;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.details-toggle::before {
+  content: '▸';
+  font-size: 0.7rem;
+  transition: transform 0.15s;
+}
+
+details[open] .details-toggle::before {
+  transform: rotate(90deg);
+}
+
+.details-toggle::-webkit-details-marker { display: none; }
+
+.details-body {
+  margin-top: 12px;
+}
+
+/* ─── Settings ────────────────────────────────────────────── */
+.setting-label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.setting-hint {
+  font-size: 0.75rem;
+  color: var(--text);
+  opacity: 0.5;
+  margin-top: 8px;
+}
+
+.setting-hint a {
+  color: var(--accent);
+}
+
+/* ─── Responsive ──────────────────────────────────────────── */
+@media (max-width: 860px) {
+  main {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  #chessboard {
+    width: min(480px, calc(100vw - 48px));
+    height: min(480px, calc(100vw - 48px));
+  }
+
+  .controls-column {
+    width: min(480px, calc(100vw - 48px));
+  }
+}
+
+@media (max-width: 520px) {
+  header h1 { font-size: 1.3rem; }
+  .difficulty-group { grid-template-columns: repeat(2, 1fr); }
+}
