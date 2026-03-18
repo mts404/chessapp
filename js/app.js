@@ -12,8 +12,13 @@
   let nextToMove  = 'b';
   let aiThinking  = false;
   let engineReady = false;
-  let pendingFen  = null;      // FEN waiting for confirmation
+  let pendingFen    = null;      // FEN waiting for confirmation
   let uploadedImage = null;    // { base64, mimeType }
+  let selectedSquare = null;   // square selected for tap-to-move
+  let editMode      = false;   // board editor active
+  let editPosition  = {};      // position object during editing
+  let selectedTool  = null;    // selected palette piece or 'eraser'
+  let editFromConfirm = false; // true if editor opened from confirm section
 
   const PIECE_THEME = 'img/pieces/{piece}.svg';
 
@@ -30,6 +35,7 @@
   const $confirmFen    = $('#confirmFen');
   const $analyseBtn    = $('#analyseBtn');
   const $uploadArea    = $('#uploadArea');
+  const $editorSec     = $('#editorSection');
 
   /* ── Board setup ─────────────────────────────────────────── */
   function initBoard() {
@@ -49,17 +55,53 @@
   }
 
   /* ── Drag / Drop ─────────────────────────────────────────── */
-  function onDragStart(_source, piece) {
-    if (game.game_over()) return false;
-    if (aiThinking) return false;
+  function onDragStart(source, piece) {
+    if (editMode) {
+      handleBoardEditClick(source);
+      return false;
+    }
+
+    if (game.game_over() || aiThinking || game.turn() !== playerSide) {
+      return false;
+    }
+
+    // If a piece is already selected and we're touching a destination piece,
+    // try the tap-move before allowing drag
+    if (selectedSquare && selectedSquare !== source) {
+      var tapMove = game.move({
+        from: selectedSquare,
+        to: source,
+        promotion: 'q',
+      });
+      if (tapMove) {
+        clearSelection();
+        board.position(game.fen());
+        updateUI();
+        if (!game.game_over()) {
+          window.setTimeout(requestAiMove, 150);
+        }
+        return false; // cancel drag, move already made
+      }
+    }
+
+    // Only allow dragging player's pieces
     if (playerSide === 'w' && piece.search(/^b/) !== -1) return false;
     if (playerSide === 'b' && piece.search(/^w/) !== -1) return false;
-    if (game.turn() !== playerSide) return false;
+
+    // Select this piece (highlights will show during drag too)
+    selectSquare(source);
     return true;
   }
 
   function onDrop(source, target) {
-    const move = game.move({
+    if (source === target) {
+      // Clicked a piece without dragging — keep it selected (onDragStart already selected it)
+      return 'snapback';
+    }
+
+    clearSelection();
+
+    var move = game.move({
       from: source,
       to: target,
       promotion: 'q',
@@ -74,6 +116,151 @@
 
   function onSnapEnd() {
     board.position(game.fen());
+  }
+
+  /* ── Tap-to-Move helpers ─────────────────────────────────── */
+  function handleSquareTap(square) {
+    if (game.game_over() || aiThinking || game.turn() !== playerSide) {
+      clearSelection();
+      return;
+    }
+
+    var piece = game.get(square);
+
+    if (selectedSquare) {
+      if (selectedSquare === square) {
+        clearSelection();
+        return;
+      }
+
+      var move = game.move({
+        from: selectedSquare,
+        to: square,
+        promotion: 'q',
+      });
+
+      clearSelection();
+
+      if (move) {
+        board.position(game.fen());
+        updateUI();
+        if (!game.game_over()) {
+          window.setTimeout(requestAiMove, 150);
+        }
+        return;
+      }
+
+      if (piece && piece.color === playerSide) {
+        selectSquare(square);
+      }
+    } else {
+      if (piece && piece.color === playerSide) {
+        selectSquare(square);
+      }
+    }
+  }
+
+  function selectSquare(square) {
+    clearSelection();
+    selectedSquare = square;
+
+    $('[data-square="' + square + '"]').addClass('selected-square');
+
+    var moves = game.moves({ square: square, verbose: true });
+    for (var i = 0; i < moves.length; i++) {
+      var targetSq = $('[data-square="' + moves[i].to + '"]');
+      targetSq.addClass(moves[i].captured ? 'legal-capture' : 'legal-move');
+    }
+  }
+
+  function clearSelection() {
+    selectedSquare = null;
+    $('.selected-square, .legal-move, .legal-capture')
+      .removeClass('selected-square legal-move legal-capture');
+  }
+
+  /* ── Board Editor ────────────────────────────────────────── */
+  function enterEditMode(fromConfirm) {
+    editMode = true;
+    editFromConfirm = !!fromConfirm;
+    selectedTool = null;
+    editPosition = $.extend({}, board.position());
+    clearSelection();
+
+    $confirmSec.slideUp(200);
+    $editorSec.slideDown(200);
+    $('#chessboard').addClass('edit-mode');
+    $('.palette-piece').removeClass('active-tool');
+  }
+
+  function exitEditMode(save) {
+    editMode = false;
+    selectedTool = null;
+    $('#chessboard').removeClass('edit-mode');
+    $editorSec.slideUp(200);
+
+    if (save) {
+      var placement = positionToFen(editPosition);
+      var turn = nextToMove;
+      var fullFen = buildFen(placement, turn);
+
+      var tempGame = new Chess();
+      var validation = tempGame.validate_fen(fullFen);
+      if (!validation.valid) {
+        showVisionStatus('Invalid position: ' + validation.error, 'error');
+        return;
+      }
+
+      pendingFen = fullFen;
+      game.load(fullFen);
+      board.position(game.fen(), true);
+      $confirmFen.text(fullFen);
+      $confirmSec.slideDown(200);
+      showVisionStatus('Position updated — review below', 'ok');
+    } else {
+      if (pendingFen) {
+        game.load(pendingFen);
+        board.position(game.fen(), true);
+      }
+      if (editFromConfirm) {
+        $confirmSec.slideDown(200);
+      }
+    }
+  }
+
+  function handleBoardEditClick(square) {
+    if (!editMode) return;
+
+    if (selectedTool === 'eraser') {
+      delete editPosition[square];
+    } else if (selectedTool) {
+      editPosition[square] = selectedTool;
+    }
+
+    board.position(editPosition, false);
+  }
+
+  function positionToFen(position) {
+    var files = 'abcdefgh';
+    var fen = '';
+    for (var rank = 8; rank >= 1; rank--) {
+      var empty = 0;
+      for (var f = 0; f < 8; f++) {
+        var sq = files[f] + rank;
+        var piece = position[sq];
+        if (piece) {
+          if (empty > 0) { fen += empty; empty = 0; }
+          var color = piece[0];
+          var type = piece[1];
+          fen += color === 'w' ? type : type.toLowerCase();
+        } else {
+          empty++;
+        }
+      }
+      if (empty > 0) fen += empty;
+      if (rank > 1) fen += '/';
+    }
+    return fen;
   }
 
   /* ── AI Move ─────────────────────────────────────────────── */
@@ -156,7 +343,7 @@
       overlayCls = 'overlay-check';
     } else {
       msg = game.turn() === playerSide
-        ? 'Your turn — drag a piece to move'
+        ? 'Your turn — tap or drag a piece to move'
         : 'AI is thinking…';
     }
 
@@ -384,6 +571,31 @@
 
     $analyseBtn.on('click', analyseScreenshot);
 
+    /* ── Board clicks: edit-mode placement + tap-to-move for empty squares.
+         Piece squares are handled by onDragStart (chessboard.js callback). ── */
+    $('#chessboard').on('mousedown touchstart', function (e) {
+      var target = $(e.target);
+      var sq = target.is('[data-square]') ? target : target.closest('[data-square]');
+      if (!sq || !sq.length) return;
+      var square = sq.data('square');
+
+      if (editMode) {
+        var pos = board.position();
+        if (!pos[square]) {
+          e.preventDefault();
+          handleBoardEditClick(square);
+        }
+        return;
+      }
+
+      if (!selectedSquare) return;
+      var piece = game.get(square);
+      if (piece) return;
+
+      e.preventDefault();
+      handleSquareTap(square);
+    });
+
     /* ── Confirmation ────────────────────────────────────── */
     $('#confirmBtn').on('click', function () {
       if (pendingFen) {
@@ -393,10 +605,36 @@
       }
     });
 
+    $('#modifyBtn').on('click', function () {
+      enterEditMode(true);
+    });
+
     $('#rejectBtn').on('click', function () {
       $confirmSec.slideUp(200);
       pendingFen = null;
       newGame();
+    });
+
+    /* ── Board Editor ────────────────────────────────────── */
+    $('#piecePalette').on('click', '.palette-piece', function () {
+      var piece = $(this).data('piece');
+      if (!piece) return;
+      $('.palette-piece').removeClass('active-tool');
+      $(this).addClass('active-tool');
+      selectedTool = piece;
+    });
+
+    $('#clearBoardBtn').on('click', function () {
+      editPosition = {};
+      board.position(editPosition, false);
+    });
+
+    $('#doneEditBtn').on('click', function () {
+      exitEditMode(true);
+    });
+
+    $('#cancelEditBtn').on('click', function () {
+      exitEditMode(false);
     });
 
     /* ── Side picker ─────────────────────────────────────── */
@@ -475,6 +713,12 @@
 
     $('#flipBtn').on('click', function () {
       board.flip();
+    });
+
+    $('#editBoardBtn').on('click', function () {
+      if (editMode) return;
+      pendingFen = game.fen();
+      enterEditMode();
     });
 
     /* ── API Key ─────────────────────────────────────────── */

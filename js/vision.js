@@ -58,42 +58,59 @@ class ChessVision {
 
   async _callModel(model, key, base64Image, mimeType) {
     const INITIAL_PROMPT = [
-      'This is a screenshot from a chess app (likely Duolingo). IGNORE everything except the 8×8 chess board grid.',
-      'Ignore any UI elements: avatars, speech bubbles, buttons, banners, text overlays, progress bars.',
-      'Focus ONLY on the checkerboard grid and the chess pieces on it.',
+      'You are analyzing a screenshot of a chess board from a mobile chess app (likely Duolingo).',
       '',
-      'The board is from White\'s perspective: rank 1 (bottom row), rank 8 (top row). File a (left), file h (right).',
-      'Piece colours: LIGHT/WHITE pieces are the lighter-coloured 3D pieces. DARK/BLACK pieces are the darker-coloured 3D pieces.',
+      'STEP 1 — LOCATE THE BOARD',
+      'Find the 8×8 chess board grid in the image. IGNORE everything outside it: avatars, names, speech bubbles, buttons, banners, text overlays, progress bars, timers, captured piece lists.',
       '',
-      'Piece identification guide for Duolingo-style pieces:',
-      '- King: tallest piece with a cross/plus on top',
-      '- Queen: tall piece with a crown/spiky top',
-      '- Rook: piece that looks like a castle/tower with a flat crenellated top',
-      '- Bishop: piece with a pointed/mitred top (diagonal slit)',
-      '- Knight: piece shaped like a horse head',
-      '- Pawn: smallest, simple rounded piece',
+      'STEP 2 — ORIENTATION',
+      'The board is shown from White\'s perspective:',
+      '• Top row = rank 8 (Black\'s home rank), Bottom row = rank 1 (White\'s home rank)',
+      '• Left column = file a, Right column = file h',
       '',
-      'TASK: For each of the 8 ranks (top row = rank 8, bottom row = rank 1), go left to right across all 8 files (a-h).',
-      'For each square, record the piece or note it is empty.',
+      'STEP 3 — PIECE IDENTIFICATION',
+      'Colors:',
+      '• WHITE/LIGHT pieces are the lighter-colored or cream-colored 3D pieces',
+      '• BLACK/DARK pieces are the darker-colored 3D pieces',
       '',
-      'Then convert to FEN piece-placement notation:',
-      '  K/k=King  Q/q=Queen  R/r=Rook  B/b=Bishop  N/n=Knight  P/p=Pawn',
-      '  UPPERCASE = White, lowercase = Black',
-      '  Consecutive empty squares → single digit (1-8)',
+      'Shapes (Duolingo-style):',
+      '• King (K/k): Tallest piece with a cross/plus on top',
+      '• Queen (Q/q): Tall piece with a crown or spiky top (slightly shorter than king)',
+      '• Rook (R/r): Castle/tower shape with flat crenellated (notched) top',
+      '• Bishop (B/b): Medium height, pointed/mitred top, may have diagonal slit',
+      '• Knight (N/n): Horse head — the ONLY piece with an asymmetric/animal shape',
+      '• Pawn (P/p): Smallest and simplest piece with a plain rounded top',
       '',
-      'CRITICAL RULES:',
-      '- You MUST output exactly 8 ranks separated by exactly 7 "/" characters.',
-      '- Each rank MUST sum to exactly 8 (count of pieces + sum of empty-square digits = 8).',
-      '- Double-check your count for each rank before outputting.',
+      'COMMON MISTAKES TO AVOID:',
+      '• Pawns are ALWAYS the smallest pieces — do not confuse them with bishops',
+      '• Rooks have a WIDE flat top — do not confuse with kings',
+      '• If a piece looks like a horse, it is ALWAYS a knight',
+      '• Count the total number of each piece type to sanity-check (e.g. max 8 pawns per side, max 2 rooks per side in standard play, though promotions can create extras)',
       '',
-      'Output ONLY the FEN piece-placement string on one line. No explanation, no markdown.',
+      'STEP 4 — SCAN EACH RANK',
+      'Go row by row from the TOP of the image (rank 8) to the BOTTOM (rank 1).',
+      'For each row, go square by square from LEFT (file a) to RIGHT (file h).',
+      'For each of the 64 squares, determine: empty, or which piece (type + color).',
+      '',
+      'STEP 5 — BUILD FEN PLACEMENT STRING',
+      'FEN notation: UPPERCASE = White (K Q R B N P), lowercase = Black (k q r b n p).',
+      'Consecutive empty squares are written as a single digit (1-8).',
+      'Ranks are separated by "/" characters.',
+      '',
+      'STEP 6 — VALIDATE BEFORE OUTPUTTING',
+      '• Count: exactly 8 rank segments separated by exactly 7 "/" characters.',
+      '• For EACH rank: (number of piece letters) + (sum of digit values) MUST equal exactly 8.',
+      '• Fix any rank that does not sum to 8 before outputting.',
+      '',
+      'OUTPUT: Print ONLY the FEN piece-placement string. One line. No explanation, no markdown, no backticks.',
       'Example: rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR',
     ].join('\n');
 
-    // First attempt (with thinking enabled for careful analysis)
+    const imagePart = { inline_data: { mime_type: mimeType, data: base64Image } };
+    const MAX_RETRIES = 2;
+
     let answerText = await this._geminiRequest(model, key, [
-      { text: INITIAL_PROMPT },
-      { inline_data: { mime_type: mimeType, data: base64Image } },
+      { text: INITIAL_PROMPT }, imagePart,
     ], true);
 
     let fen = this._tryExtractFen(answerText);
@@ -101,33 +118,35 @@ class ChessVision {
 
     if (!validationError) return fen;
 
-    // Auto-retry: send the bad FEN back with the specific error
-    const retryPrompt = [
-      `Your previous answer was: ${fen || answerText}`,
-      `Problem: ${validationError}`,
-      '',
-      'Look at the chess board in the image again very carefully.',
-      'Go square by square, rank by rank, starting from rank 8 (top row) to rank 1 (bottom row).',
-      'For each rank, count from file a (left) to file h (right). Verify the total is 8 for every rank.',
-      '',
-      'RULES:',
-      '- EXACTLY 8 ranks separated by 7 "/" characters.',
-      '- Each rank: pieces + empty digits MUST sum to exactly 8.',
-      '',
-      'Return ONLY the corrected FEN piece-placement string.',
-    ].join('\n');
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      const retryPrompt = [
+        `Your previous answer was: ${fen || answerText}`,
+        `Problem: ${validationError}`,
+        '',
+        'Look at the chess board screenshot again VERY carefully.',
+        'Go square by square, rank by rank, starting from rank 8 (top) to rank 1 (bottom), file a (left) to file h (right).',
+        '',
+        'For each rank, verify: (count of piece letters) + (sum of empty-square digits) = 8.',
+        '',
+        'RULES:',
+        '- EXACTLY 8 ranks separated by 7 "/" characters.',
+        '- Each rank MUST sum to exactly 8.',
+        '- UPPERCASE = White, lowercase = Black.',
+        '',
+        'Return ONLY the corrected FEN piece-placement string.',
+      ].join('\n');
 
-    answerText = await this._geminiRequest(model, key, [
-      { text: retryPrompt },
-      { inline_data: { mime_type: mimeType, data: base64Image } },
-    ], true);
+      answerText = await this._geminiRequest(model, key, [
+        { text: retryPrompt }, imagePart,
+      ], true);
 
-    fen = this._tryExtractFen(answerText);
-    validationError = fen ? this._validatePlacement(fen) : 'No FEN found in response';
+      fen = this._tryExtractFen(answerText);
+      validationError = fen ? this._validatePlacement(fen) : 'No FEN found in response';
 
-    if (!validationError) return fen;
+      if (!validationError) return fen;
+    }
 
-    throw new Error(`FEN still invalid after retry: ${validationError}  (got "${fen || answerText}")`);
+    throw new Error(`FEN still invalid after ${MAX_RETRIES} retries: ${validationError}  (got "${fen || answerText}")`);
   }
 
   /**

@@ -67,7 +67,40 @@
         <p class="confirm-hint">Check the board — does it match your screenshot?</p>
         <div class="confirm-actions">
           <button id="confirmBtn" class="btn btn-primary">Start Playing</button>
+          <button id="modifyBtn" class="btn">Modify</button>
           <button id="rejectBtn" class="btn">Try Again</button>
+        </div>
+      </section>
+
+      <!-- Board Editor (hidden until Modify is clicked) -->
+      <section class="control-section editor-section" id="editorSection" style="display:none">
+        <h2>Edit Position</h2>
+        <p class="editor-hint">Select a piece, then tap a square to place it.</p>
+        <div class="piece-palette" id="piecePalette">
+          <div class="palette-row">
+            <button class="palette-piece" data-piece="wK"><img src="img/pieces/wK.svg" alt="K"></button>
+            <button class="palette-piece" data-piece="wQ"><img src="img/pieces/wQ.svg" alt="Q"></button>
+            <button class="palette-piece" data-piece="wR"><img src="img/pieces/wR.svg" alt="R"></button>
+            <button class="palette-piece" data-piece="wB"><img src="img/pieces/wB.svg" alt="B"></button>
+            <button class="palette-piece" data-piece="wN"><img src="img/pieces/wN.svg" alt="N"></button>
+            <button class="palette-piece" data-piece="wP"><img src="img/pieces/wP.svg" alt="P"></button>
+          </div>
+          <div class="palette-row">
+            <button class="palette-piece" data-piece="bK"><img src="img/pieces/bK.svg" alt="k"></button>
+            <button class="palette-piece" data-piece="bQ"><img src="img/pieces/bQ.svg" alt="q"></button>
+            <button class="palette-piece" data-piece="bR"><img src="img/pieces/bR.svg" alt="r"></button>
+            <button class="palette-piece" data-piece="bB"><img src="img/pieces/bB.svg" alt="b"></button>
+            <button class="palette-piece" data-piece="bN"><img src="img/pieces/bN.svg" alt="n"></button>
+            <button class="palette-piece" data-piece="bP"><img src="img/pieces/bP.svg" alt="p"></button>
+          </div>
+          <div class="palette-row palette-tools">
+            <button class="palette-piece palette-eraser" data-piece="eraser">&#10005; Remove</button>
+            <button class="palette-piece palette-action" id="clearBoardBtn">Clear Board</button>
+          </div>
+        </div>
+        <div class="editor-actions">
+          <button id="doneEditBtn" class="btn btn-primary">Done Editing</button>
+          <button id="cancelEditBtn" class="btn">Cancel</button>
         </div>
       </section>
 
@@ -109,6 +142,7 @@
           <button id="newGameBtn" class="btn btn-primary">New Game</button>
           <button id="undoBtn" class="btn">Go Back</button>
           <button id="flipBtn" class="btn">Flip Board</button>
+          <button id="editBoardBtn" class="btn">Edit Board</button>
         </div>
       </section>
 
