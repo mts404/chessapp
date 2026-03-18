@@ -463,35 +463,62 @@
     }
 
     $analyseBtn.prop('disabled', true).text('Analysing…');
-    showVisionStatus('Sending screenshot to Gemini…', 'busy');
+    showVisionStatus('Detecting board layout…', 'busy');
 
     try {
-      const placement = await vision.analyse(
-        uploadedImage.base64,
-        uploadedImage.mimeType,
-        (msg) => showVisionStatus(msg, 'busy')
-      );
-      const turn = nextToMove;
-      const fullFen = buildFen(placement, turn);
+      var placement;
 
-      // Validate the FEN before showing confirmation
-      const tempGame = new Chess();
-      const validation = tempGame.validate_fen(fullFen);
+      // Phase 1: Canvas-based board detection (deterministic)
+      var detector = new BoardDetector();
+      var img = new Image();
+      img.src = 'data:' + uploadedImage.mimeType + ';base64,' + uploadedImage.base64;
+      await new Promise(function (resolve, reject) {
+        img.onload = resolve;
+        img.onerror = reject;
+      });
+
+      var detection = detector.analyze(img);
+
+      if (detection) {
+        // Board found — use targeted AI (only needs to identify piece types)
+        showVisionStatus('Board found — identifying pieces…', 'busy');
+        placement = await vision.analyseWithHints(
+          detection.annotatedBase64,
+          'image/png',
+          detection.grid,
+          function (msg) { showVisionStatus(msg, 'busy'); }
+        );
+      } else {
+        // Board detection failed — fall back to full AI analysis
+        showVisionStatus('Sending screenshot to AI…', 'busy');
+        placement = await vision.analyse(
+          uploadedImage.base64,
+          uploadedImage.mimeType,
+          function (msg) { showVisionStatus(msg, 'busy'); }
+        );
+      }
+
+      var turn = nextToMove;
+      var fullFen = buildFen(placement, turn);
+
+      var tempGame = new Chess();
+      var validation = tempGame.validate_fen(fullFen);
       if (!validation.valid) {
-        showVisionStatus(`Invalid position detected: ${validation.error}`, 'error');
+        showVisionStatus('Invalid position detected: ' + validation.error, 'error');
         $analyseBtn.prop('disabled', false).text('Analyse Screenshot');
         return;
       }
 
       pendingFen = fullFen;
-
-      // Show the detected position on the board for review
       game.load(fullFen);
       board.position(game.fen(), true);
 
       $confirmFen.text(fullFen);
       $confirmSec.slideDown(200);
-      showVisionStatus('Position detected — review below', 'ok');
+      showVisionStatus(
+        detection ? 'Position detected (canvas + AI) — review below' : 'Position detected — review below',
+        'ok'
+      );
 
     } catch (err) {
       console.error('Vision error:', err);

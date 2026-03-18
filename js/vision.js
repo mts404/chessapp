@@ -56,6 +56,139 @@ class ChessVision {
     throw lastError;
   }
 
+  /**
+   * Analyse using pre-detected board layout from BoardDetector.
+   * The AI only needs to identify piece TYPES — grid alignment, occupancy,
+   * and piece colors are already determined by canvas pixel analysis.
+   *
+   * @param {string}   base64Image — annotated cropped board (PNG, no data URI prefix)
+   * @param {string}   mimeType
+   * @param {Array}    grid — 8×8 grid from BoardDetector with { empty, pieceColor } per square
+   * @param {function} onStatus
+   * @returns {Promise<string>} FEN placement string
+   */
+  async analyseWithHints(base64Image, mimeType, grid, onStatus) {
+    const key = this.getApiKey();
+    if (!key) throw new Error('No Gemini API key configured');
+
+    const files = 'abcdefgh';
+    const hints = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (!grid[r][c].empty) {
+          const sq = files[c] + (8 - r);
+          const color = grid[r][c].pieceColor === 'w' ? 'White' : 'Black';
+          hints.push(sq + ': ' + color + ' piece');
+        }
+      }
+    }
+
+    const prompt = [
+      'This is a CROPPED chess board image with rank numbers (1-8 on the left) and file letters (a-h on the bottom).',
+      'The board is from White\'s perspective: rank 8 is at the top, rank 1 at the bottom.',
+      '',
+      'I have already detected which squares contain pieces and their colors using pixel analysis:',
+      '',
+      hints.join('\n'),
+      '',
+      'Your ONLY task: identify the PIECE TYPE for each occupied square listed above.',
+      '',
+      'Piece types:',
+      '  King (K/k) — tallest piece with a cross/plus on top',
+      '  Queen (Q/q) — tall piece with a crown/spiky top',
+      '  Rook (R/r) — castle/tower shape with flat notched top',
+      '  Bishop (B/b) — pointed/mitred top, medium height',
+      '  Knight (N/n) — horse head shape (only asymmetric piece)',
+      '  Pawn (P/p) — smallest piece with a rounded top',
+      '',
+      'Output the COMPLETE FEN placement string.',
+      'UPPERCASE = White piece, lowercase = Black piece, digits = consecutive empty squares.',
+      'Exactly 8 ranks separated by 7 "/" characters. Each rank must sum to 8.',
+      '',
+      'IMPORTANT: Use the exact occupied/empty squares I listed above. Do NOT move, add, or remove any pieces.',
+      'If you are unsure about a piece type, use your best guess based on the image.',
+    ].join('\n');
+
+    let lastError = null;
+    for (const model of this.MODELS) {
+      try {
+        if (onStatus) onStatus('Identifying pieces with ' + model + '…');
+
+        const imagePart = { inline_data: { mime_type: mimeType, data: base64Image } };
+
+        let answerText = await this._geminiRequest(model, key, [
+          { text: prompt }, imagePart,
+        ], true);
+
+        let fen = this._tryExtractFen(answerText);
+        let error = fen ? this._validatePlacement(fen) : 'No FEN found in response';
+        if (!error) return fen;
+
+        // One retry with specific feedback
+        const retryPrompt = [
+          'Previous answer: ' + (fen || answerText),
+          'Problem: ' + error,
+          '',
+          'Re-read the image using the rank/file labels and my detected layout.',
+          'Each rank must have pieces + empty digits = 8.',
+          'Return ONLY the corrected FEN placement string.',
+        ].join('\n');
+
+        answerText = await this._geminiRequest(model, key, [
+          { text: retryPrompt }, imagePart,
+        ], true);
+
+        fen = this._tryExtractFen(answerText);
+        error = fen ? this._validatePlacement(fen) : 'No FEN found';
+        if (!error) return fen;
+
+        throw new Error('FEN invalid after retry: ' + error);
+      } catch (err) {
+        lastError = err;
+        const isRateLimit = err.message.includes('429') ||
+                            err.message.toLowerCase().includes('quota') ||
+                            err.message.toLowerCase().includes('rate');
+        if (isRateLimit && model !== this.MODELS[this.MODELS.length - 1]) {
+          if (onStatus) onStatus(model + ' rate-limited, trying fallback…');
+          continue;
+        }
+        throw err;
+      }
+    }
+    throw lastError;
+  }
+
+  /**
+   * Check that the AI's FEN respects the canvas-detected occupancy.
+   * Returns an error string or null if consistent.
+   */
+  _checkHintConsistency(fen, grid) {
+    const ranks = fen.split('/');
+    if (ranks.length !== 8) return null; // basic validation handles this
+
+    for (let r = 0; r < 8; r++) {
+      let file = 0;
+      for (const ch of ranks[r]) {
+        if (ch >= '1' && ch <= '8') {
+          for (let k = 0; k < parseInt(ch, 10); k++) {
+            if (file < 8 && !grid[r][file].empty) {
+              return 'Rank ' + (8 - r) + ': square ' + 'abcdefgh'[file] + (8 - r) +
+                     ' should have a piece but FEN shows empty';
+            }
+            file++;
+          }
+        } else {
+          if (file < 8 && grid[r][file].empty) {
+            return 'Rank ' + (8 - r) + ': square ' + 'abcdefgh'[file] + (8 - r) +
+                   ' should be empty but FEN shows a piece';
+            }
+          file++;
+        }
+      }
+    }
+    return null;
+  }
+
   async _callModel(model, key, base64Image, mimeType) {
     const INITIAL_PROMPT = [
       'You are analyzing a screenshot of a chess board from a mobile chess app (likely Duolingo).',
