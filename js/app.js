@@ -456,21 +456,45 @@
   async function analyseScreenshot() {
     if (!uploadedImage) return;
 
-    if (!vision.hasApiKey()) {
-      showVisionStatus('Set your Gemini API key in Settings below', 'error');
-      $('#settingsDetails').attr('open', '');
-      return;
-    }
-
     $analyseBtn.prop('disabled', true).text('Analysing…');
-    showVisionStatus('Analysing screenshot…', 'busy');
 
     try {
-      var placement = await vision.analyse(
-        uploadedImage.base64,
-        uploadedImage.mimeType,
-        function (msg) { showVisionStatus(msg, 'busy'); }
-      );
+      var placement = null;
+
+      // Primary path: deterministic pixel-based board detection (no AI)
+      showVisionStatus('Detecting board layout…', 'busy');
+      try {
+        var detector = new BoardDetector();
+        var img = new Image();
+        await new Promise(function (resolve, reject) {
+          img.onload = resolve;
+          img.onerror = function () { reject(new Error('Image load failed')); };
+          img.src = 'data:' + uploadedImage.mimeType + ';base64,' + uploadedImage.base64;
+        });
+
+        var detection = detector.analyze(img);
+        if (detection && detection.fen) {
+          placement = detection.fen;
+          showVisionStatus('Board detected via pixel analysis', 'busy');
+          console.log('[analyseScreenshot] Pixel detector result:', placement);
+        }
+      } catch (detErr) {
+        console.warn('[analyseScreenshot] Pixel detector error:', detErr);
+      }
+
+      // Fallback: AI-based analysis if pixel detection failed or returned nothing
+      if (!placement && vision.hasApiKey()) {
+        showVisionStatus('Pixel detection failed — trying AI…', 'busy');
+        placement = await vision.analyse(
+          uploadedImage.base64,
+          uploadedImage.mimeType,
+          function (msg) { showVisionStatus(msg, 'busy'); }
+        );
+      } else if (!placement) {
+        showVisionStatus('Pixel detection failed. Set a Gemini API key in Settings for AI fallback.', 'error');
+        $analyseBtn.prop('disabled', false).text('Analyse Screenshot');
+        return;
+      }
 
       var turn = nextToMove;
       var fullFen = buildFen(placement, turn);
